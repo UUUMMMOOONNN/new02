@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>無駄にリアルなガチャアプリ</title>
+  <meta name="description" content="演出だけ無駄にリアル。結果はだいたいしょうもない。単体HTMLで動くガチャアプリ。" />
+  <style>
+    :root{
+      --bg0:#070812;
+      --bg1:#0b1230;
+      --bg2:#141a42;
+      --txt:#eaf0ff;
+      --mut:#9fb0ff;
+      --gold:#ffd36b;
+      --cyan:#67f0ff;
+      --pink:#ff5bd6;
+      --red:#ff3a4a;
+      --shadow: 0 18px 50px rgba(0,0,0,.55);
+      --glass: rgba(255,255,255,.08);
+      --glass2: rgba(255,255,255,.12);
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", Meiryo, Arial;
+      color:var(--txt);
+      background:
+        radial-gradient(1200px 700px at 30% 10%, #2a2a6b 0%, transparent 55%),
+        radial-gradient(900px 600px at 80% 20%, #5a1f6c 0%, transparent 50%),
+        radial-gradient(700px 500px at 60% 90%, #123a5a 0%, transparent 55%),
+        linear-gradient(180deg, var(--bg1), var(--bg0));
+      overflow-x:hidden;
+    }
+
+    /* App layout */
+    .app{max-width:1100px;margin:0 auto;padding:18px 16px 28px}
+    .top{
+      display:flex;gap:12px;align-items:flex-end;justify-content:space-between;
+      margin-bottom:14px;
+    }
+    .brand{display:flex;flex-direction:column;gap:6px}
+    .logo{
+      font-weight:900; letter-spacing:.18em;
+      font-size:32px;
+      background: linear-gradient(90deg, #fff, var(--gold), #fff);
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+      text-shadow: 0 10px 30px rgba(255,211,107,.15);
+    }
+    .sub{color:rgba(234,240,255,.78); font-size:13px}
+    .stats{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+    .chip{
+      border:1px solid rgba(255,255,255,.12);
+      background: linear-gradient(180deg, var(--glass2), var(--glass));
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+      padding:10px 12px;border-radius:14px;
+      font-size:13px;color:rgba(234,240,255,.85);
+    }
+    .chip b{color:#fff; font-size:15px; margin-left:6px}
+
+    .main{display:grid;grid-template-columns: 1.25fr .75fr; gap:14px}
+    @media (max-width: 980px){
+      .main{grid-template-columns:1fr}
+    }
+
+    /* Stage */
+    .stage{
+      position:relative;
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:22px;
+      overflow:hidden;
+      box-shadow: var(--shadow);
+      min-height:560px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      transform: translateZ(0); /* keep animations smooth */
+    }
+    .bg{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(900px 450px at 50% 30%, rgba(255,255,255,.10), transparent 60%),
+        radial-gradient(600px 380px at 20% 70%, rgba(103,240,255,.10), transparent 60%),
+        radial-gradient(650px 420px at 80% 70%, rgba(255,91,214,.10), transparent 60%),
+        linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.45));
+    }
+    .vignette{
+      position:absolute; inset:-1px;
+      background: radial-gradient(900px 540px at 50% 40%, transparent 40%, rgba(0,0,0,.55) 100%);
+    }
+    .scan{
+      position:absolute; inset:0;
+      background: linear-gradient(180deg, transparent, rgba(103,240,255,.06), transparent);
+      opacity:.55;
+      transform: translateY(-100%);
+      animation: scan 5.8s linear infinite;
+      mix-blend-mode: screen;
+    }
+    @keyframes scan{
+      to{ transform: translateY(120%); }
+    }
+    .halo{
+      position:absolute; inset:0;
+      background: radial-gradient(closest-side at 50% 45%, rgba(255,211,107,.16), transparent 70%);
+      filter: blur(2px);
+    }
+    .rings{
+      position:absolute; left:50%; top:44%;
+      width:540px; height:540px;
+      transform: translate(-50%,-50%);
+      border-radius:50%;
+      background:
+        radial-gradient(circle at center,
+          rgba(255,255,255,.0) 46%,
+          rgba(255,255,255,.12) 47%,
+          rgba(255,255,255,.0) 49%,
+          rgba(255,255,255,.12) 50%,
+          rgba(255,255,255,.0) 52%);
+      filter: blur(.2px);
+      opacity:.55;
+      animation: spin 18s linear infinite;
+    }
+    @keyframes spin{
+      to{ transform: translate(-50%,-50%) rotate(360deg); }
+    }
+
+    /* FX layers */
+    .fx{position:absolute; inset:0; pointer-events:none;}
+    /* beam */
+    .beam{
+      position:absolute; left:50%; top:0;
+      width:18px; height:100%;
+      transform: translateX(-50%) scaleY(0);
+      transform-origin: top;
+      opacity:0;
+      background: linear-gradient(180deg, rgba(255,255,255,.0), rgba(103,240,255,.28), rgba(255,91,214,.26), rgba(255,211,107,.18), rgba(255,255,255,0));
+      filter: blur(1px);
+      mix-blend-mode: screen;
+    }
+    .burst{
+      position:absolute; left:50%; top:44%;
+      width:620px;height:620px;
+      transform: translate(-50%,-50%) scale(0.2);
+      opacity:0;
+      background: radial-gradient(circle,
+        rgba(255,255,255,.0) 35%,
+        rgba(255,211,107,.22) 42%,
+        rgba(255,91,214,.18) 48%,
+        rgba(103,240,255,.14) 54%,
+        rgba(255,255,255,0) 70%);
+      filter: blur(1px);
+      mix-blend-mode: screen;
+    }
+    .confetti, .shards, .glitch{position:absolute; inset:0; opacity:0;}
+    .glitch{
+      background: repeating-linear-gradient(
+        90deg,
+        rgba(255,91,214,.07),
+        rgba(255,91,214,.07) 6px,
+        rgba(103,240,255,.07) 6px,
+        rgba(103,240,255,.07) 12px
+      );
+      mix-blend-mode: overlay;
+      filter: contrast(1.2) saturate(1.3);
+    }
+    .stage.shake{
+      animation: shake .52s ease-in-out 0s 2;
+    }
+    @keyframes shake{
+      0%{transform:translate(0,0)}
+      15%{transform:translate(-4px,2px) rotate(-.2deg)}
+      35%{transform:translate(5px,-3px) rotate(.25deg)}
+      55%{transform:translate(-3px,-2px) rotate(-.2deg)}
+      75%{transform:translate(4px,3px) rotate(.2deg)}
+      100%{transform:translate(0,0)}
+    }
+
+    /* Card */
+    .cardWrap{
+      position:relative;
+      height:100%;
+      display:grid;
+      place-items:center;
+      padding:34px 18px 110px;
+    }
+    .card{
+      width:min(420px, 88%);
+      aspect-ratio: 3 / 4;
+      border-radius:20px;
+      perspective: 1100px;
+      filter: drop-shadow(0 24px 70px rgba(0,0,0,.65));
+    }
+    .cardInner{
+      width:100%; height:100%;
+      position:relative;
+      transform-style:preserve-3d;
+      transition: transform .85s cubic-bezier(.2,.9,.2,1);
+    }
+    .card.is-flip .cardInner{ transform: rotateY(180deg); }
+
+    .cardFront, .cardBack{
+      position:absolute; inset:0;
+      border-radius:20px;
+      backface-visibility:hidden;
+      border:1px solid rgba(255,255,255,.18);
+      background:
+        radial-gradient(400px 240px at 40% 20%, rgba(255,255,255,.16), transparent 60%),
+        radial-gradient(380px 280px at 70% 85%, rgba(103,240,255,.10), transparent 60%),
+        linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.04));
+      overflow:hidden;
+    }
+    .cardFront::before, .cardBack::before{
+      content:"";
+      position:absolute; inset:-2px;
+      background:
+        conic-gradient(from 180deg,
+          rgba(255,211,107,.0),
+          rgba(255,211,107,.35),
+          rgba(255,91,214,.35),
+          rgba(103,240,255,.35),
+          rgba(255,211,107,.0));
+      filter: blur(10px);
+      opacity:.55;
+    }
+    .cardFront{
+      display:flex; flex-direction:column;
+      justify-content:flex-end;
+      padding:18px;
+    }
+    .stamp{
+      position:absolute; left:16px; top:16px;
+      padding:8px 10px;
+      border-radius:14px;
+      font-weight:800;
+      letter-spacing:.18em;
+      font-size:12px;
+      color:rgba(255,255,255,.88);
+      background: rgba(0,0,0,.25);
+      border:1px solid rgba(255,255,255,.14);
+    }
+    .title{font-size:22px;font-weight:900;letter-spacing:.06em}
+    .hint{margin-top:6px;color:rgba(234,240,255,.78);font-size:13px;line-height:1.5}
+
+    .cardBack{
+      transform: rotateY(180deg);
+      padding:18px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .rarity{
+      font-weight:1000;
+      letter-spacing:.22em;
+      font-size:14px;
+      padding:10px 12px;
+      border-radius:16px;
+      background: rgba(0,0,0,.26);
+      border:1px solid rgba(255,255,255,.14);
+      width:fit-content;
+    }
+    .item{
+      font-size:26px;
+      font-weight:1000;
+      letter-spacing:.04em;
+    }
+    .desc{
+      color: rgba(234,240,255,.84);
+      line-height:1.65;
+      font-size:14px;
+      background: rgba(0,0,0,.18);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:16px;
+      padding:12px 12px;
+    }
+    .tag{
+      margin-top:auto;
+      font-size:12px;
+      color: rgba(234,240,255,.76);
+      letter-spacing:.08em;
+    }
+
+    /* Log */
+    .log{
+      position:absolute; left:16px; right:16px; bottom:16px;
+      padding:12px 12px;
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,.12);
+      background: linear-gradient(180deg, rgba(0,0,0,.28), rgba(0,0,0,.14));
+      backdrop-filter: blur(10px);
+      box-shadow: 0 18px 50px rgba(0,0,0,.35);
+    }
+    .logLine{
+      font-size:13px;
+      color: rgba(234,240,255,.86);
+      line-height:1.5;
+    }
+
+    /* Side panel */
+    .panel{
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:22px;
+      overflow:hidden;
+      box-shadow: var(--shadow);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      padding:16px;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+      min-height:560px;
+    }
+
+    .buttons{display:flex;flex-direction:column;gap:10px}
+    .btn{
+      appearance:none;
+      border:none;
+      border-radius:16px;
+      padding:14px 14px;
+      font-weight:900;
+      letter-spacing:.08em;
+      color:#fff;
+      cursor:pointer;
+      user-select:none;
+      transition: transform .12s ease, filter .2s ease, opacity .2s ease;
+      box-shadow: 0 18px 45px rgba(0,0,0,.35);
+      position:relative;
+      overflow:hidden;
+    }
+    .btn:active{ transform: translateY(1px) scale(.995); }
+    .btn:disabled{opacity:.45; cursor:not-allowed; filter:saturate(.65);}
+    .btn::after{
+      content:"";
+      position:absolute; inset:-2px;
+      background: radial-gradient(240px 90px at 20% 10%, rgba(255,255,255,.35), transparent 60%);
+      opacity:.7;
+      pointer-events:none;
+    }
+    .btn.primary{
+      background: linear-gradient(90deg, rgba(103,240,255,.75), rgba(255,91,214,.68), rgba(255,211,107,.60));
+    }
+    .btn.ghost{
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
+      border:1px solid rgba(255,255,255,.14);
+      box-shadow: 0 12px 30px rgba(0,0,0,.25);
+    }
+    .btn.danger{
+      background: linear-gradient(90deg, rgba(255,58,74,.82), rgba(255,91,214,.55), rgba(255,211,107,.45));
+    }
+    .btn.mini{
+      padding:10px 12px;
+      border-radius:14px;
+      font-weight:800;
+      font-size:12px;
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
+      border:1px solid rgba(255,255,255,.14);
+      box-shadow: 0 12px 30px rgba(0,0,0,.25);
+    }
+
+    .notes{
+      display:grid;
+      gap:10px;
+    }
+    .note{
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.18);
+      border-radius:18px;
+      padding:12px;
+      color: rgba(234,240,255,.84);
+      line-height:1.6;
+      font-size:13px;
+    }
+    .note b{display:block; margin-bottom:6px; color:#fff}
+
+    .foot{
+      margin-top:12px;
+      display:flex; align-items:center; gap:10px; justify-content:space-between;
+      color: rgba(234,240,255,.65);
+    }
+    .tiny{font-size:12px}
+
+    /* Rarity color accents (applied by JS to stage) */
+    .stage[data-r="N"] .rarity{border-color:rgba(255,255,255,.14)}
+    .stage[data-r="R"] .rarity{border-color:rgba(103,240,255,.35)}
+    .stage[data-r="SR"] .rarity{border-color:rgba(255,91,214,.38)}
+    .stage[data-r="SSR"] .rarity{border-color:rgba(255,211,107,.44)}
+    .stage[data-r="UR"] .rarity{border-color:rgba(255,58,74,.46)}
+
+    /* Play states */
+    .stage.play .beam{animation: beam 1.05s cubic-bezier(.2,.8,.2,1) forwards;}
+    @keyframes beam{
+      0%{opacity:0; transform:translateX(-50%) scaleY(0)}
+      20%{opacity:1}
+      100%{opacity:1; transform:translateX(-50%) scaleY(1)}
+    }
+    .stage.play .burst{animation: burst 1.1s cubic-bezier(.2,.9,.2,1) .1s forwards;}
+    @keyframes burst{
+      0%{opacity:0; transform:translate(-50%,-50%) scale(.22)}
+      20%{opacity:1}
+      100%{opacity:1; transform:translate(-50%,-50%) scale(1.05)}
+    }
+    .stage.play .glitch{animation: glitch 1.15s steps(9) .05s forwards;}
+    @keyframes glitch{
+      0%{opacity:0; transform:translateX(0)}
+      20%{opacity:1}
+      50%{transform:translateX(-8px)}
+      70%{transform:translateX(10px)}
+      100%{opacity:0; transform:translateX(0)}
+    }
+
+    /* Confetti pieces (created by JS) */
+    .piece{
+      position:absolute;
+      width:10px;height:14px;
+      border-radius:3px;
+      opacity:.0;
+      transform: translate(var(--x), var(--y)) rotate(0deg);
+      animation: pop 1.2s ease forwards;
+      mix-blend-mode: screen;
+      filter: blur(.1px);
+    }
+    @keyframes pop{
+      0%{opacity:0; transform: translate(0,0) rotate(0deg) scale(.8)}
+      15%{opacity:.95}
+      100%{opacity:0; transform: translate(var(--tx), var(--ty)) rotate(360deg) scale(1.05)}
+    }
+
+    /* Shards (created by JS) */
+    .shard{
+      position:absolute;
+      width:6px;height:40px;
+      border-radius:10px;
+      opacity:0;
+      background: linear-gradient(180deg, rgba(255,255,255,.0), rgba(255,255,255,.45), rgba(255,255,255,.0));
+      transform: translate(0,0) rotate(0deg);
+      animation: shard 1.0s ease forwards;
+      mix-blend-mode: screen;
+    }
+    @keyframes shard{
+      0%{opacity:0; transform: translate(0,0) rotate(0deg) scaleY(.4)}
+      15%{opacity:.9}
+      100%{opacity:0; transform: translate(var(--tx), var(--ty)) rotate(40deg) scaleY(1.2)}
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <div class="logo">GACHA</div>
+        <div class="sub">無駄にリアルな演出だけは神</div>
+      </div>
+      <div class="stats">
+        <div class="chip">所持石 <b id="stone">3000</b></div>
+        <div class="chip">チケット <b id="ticket">3</b></div>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="stage" aria-label="演出ステージ">
+        <div class="bg">
+          <div class="halo"></div>
+          <div class="rings"></div>
+          <div class="vignette"></div>
+          <div class="scan"></div>
+        </div>
+
+        <div class="fx">
+          <div class="beam"></div>
+          <div class="burst"></div>
+          <div class="confetti" id="confetti"></div>
+          <div class="shards" id="shards"></div>
+          <div class="glitch" id="glitch"></div>
+        </div>
+
+        <div class="cardWrap">
+          <div class="card" id="card">
+            <div class="cardInner">
+              <div class="cardFront">
+                <div class="stamp">???</div>
+                <div class="title">封印された箱</div>
+                <div class="hint">※開けると大体どうでもいい</div>
+              </div>
+              <div class="cardBack">
+                <div class="rarity" id="rarityText">---</div>
+                <div class="item" id="itemText">結果</div>
+                <div class="desc" id="descText">説明</div>
+                <div class="tag" id="tagText">#---</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="log" id="log">
+          <div class="logLine">準備OK。引くときは覚悟して。</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="buttons">
+          <button id="btnOnce" class="btn primary">1回引く（石300）</button>
+          <button id="btnTicket" class="btn ghost">チケットで引く</button>
+          <button id="btnTen" class="btn danger">10連（石3000）</button>
+        </div>
+
+        <div class="notes">
+          <div class="note">
+            <b>仕様</b>
+            <div>・演出は過剰 / 結果はしょうもない</div>
+            <div>・確定演出が出ても、だいたい「それ」</div>
+          </div>
+          <div class="note">
+            <b>操作</b>
+            <div>・演出中はボタンがロックされます</div>
+            <div>・ログが毒舌です</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <button id="btnReset" class="btn mini">石/チケを初期化</button>
+      <div class="tiny">※娯楽アプリです。人生のガチャは自己責任。</div>
+    </footer>
+  </div>
+
+  <script>
+    // ====== Simple Gacha Engine (演出だけ無駄に豪華) ======
+    const $ = (s)=>document.querySelector(s);
+
+    const state = {
+      stone: 3000,
+      ticket: 3,
+      locked: false
+    };
+
+    const el = {
+      stage: $('.stage'),
+      card: $('#card'),
+      rarityText: $('#rarityText'),
+      itemText: $('#itemText'),
+      descText: $('#descText'),
+      tagText: $('#tagText'),
+      log: $('#log'),
+      stone: $('#stone'),
+      ticket: $('#ticket'),
+      confetti: $('#confetti'),
+      shards: $('#shards'),
+      btnOnce: $('#btnOnce'),
+      btnTen: $('#btnTen'),
+      btnTicket: $('#btnTicket'),
+      btnReset: $('#btnReset'),
+    };
+
+    const POOLS = [
+      { r:"N",  name:"ホコリ",              desc:"今日もあなたは、空気を掴んだ。", tag:"#現実" },
+      { r:"N",  name:"伸びた輪ゴム",        desc:"伸びしろは…もう無い。", tag:"#老い" },
+      { r:"N",  name:"謎のネジ(1本)",       desc:"どこかで何かが足りなくなる予感。", tag:"#不安" },
+      { r:"N",  name:"期限切れクーポン",    desc:"“使おうと思ってた”は、使わない。", tag:"#人生" },
+      { r:"N",  name:"冷めたポテト",        desc:"揚げたての夢は、冷めた。", tag:"#しょんぼり" },
+      { r:"R",  name:"片方だけの靴下",      desc:"相棒は行方不明。探しても出ない。", tag:"#迷宮" },
+      { r:"R",  name:"強そうな石",          desc:"強そう（強いとは言っていない）。", tag:"#雰囲気" },
+      { r:"R",  name:"潤う気がする水",      desc:"気のせいでも、潤いは正義。", tag:"#錯覚" },
+      { r:"SR", name:"伝説級の空き箱",      desc:"中身より、箱が本体。", tag:"#本末転倒" },
+      { r:"SR", name:"確定演出の音だけ",    desc:"“来た！”と思わせて、帰る。", tag:"#煽り" },
+      { r:"SR", name:"光るだけの剣",        desc:"斬れない。でも光る。そこが良い。", tag:"#演出" },
+      { r:"SSR",name:"王のティッシュ(1枚)", desc:"しっとり…している。尊い。", tag:"#国宝" },
+      { r:"SSR",name:"神々しい領収書",      desc:"経費にできるかは、あなた次第。", tag:"#現実" },
+      { r:"UR", name:"絶対に当たる予感",    desc:"予感だけは、いつも完璧。", tag:"#期待値" },
+    ];
+
+    const RARITY_WEIGHT = [
+      { r:"N",  w: 70 },
+      { r:"R",  w: 22 },
+      { r:"SR", w: 7  },
+      { r:"SSR",w: 0.95 },
+      { r:"UR", w: 0.05 }
+    ];
+
+    // でも “確定演出” はわざと頻出させる（釣る）
+    function rollFakeHype(){
+      const x = Math.random();
+      if (x < 0.55) return "虹";     // 55% 虹（煽り）
+      if (x < 0.85) return "紫";     // 30% 紫
+      return "青";                  // 15% 青
+    }
+
+    function pickRarity(){
+      const sum = RARITY_WEIGHT.reduce((a,b)=>a+b.w,0);
+      let t = Math.random()*sum;
+      for(const rw of RARITY_WEIGHT){
+        t -= rw.w;
+        if(t <= 0) return rw.r;
+      }
+      return "N";
+    }
+
+    function pickItemByRarity(r){
+      const list = POOLS.filter(p=>p.r===r);
+      if(list.length===0){
+        return POOLS.find(p=>p.r==="N");
+      }
+      return list[Math.floor(Math.random()*list.length)];
+    }
+
+    function setLocked(v){
+      state.locked = v;
+      [el.btnOnce, el.btnTen, el.btnTicket].forEach(b=>b.disabled = v);
+    }
+
+    function updateStats(){
+      el.stone.textContent = state.stone;
+      el.ticket.textContent = state.ticket;
+    }
+
+    function logLine(text){
+      el.log.innerHTML = `<div class="logLine">${text}</div>`;
+    }
+
+    function clearFx(){
+      el.confetti.innerHTML = "";
+      el.shards.innerHTML = "";
+    }
+
+    function spawnConfetti(count=22){
+      clearFx();
+      for(let i=0;i<count;i++){
+        const p = document.createElement("div");
+        p.className = "piece";
+        const tx = (Math.random()*2 - 1) * 320;
+        const ty = (Math.random()*-1) * (220 + Math.random()*220);
+        p.style.left = "50%";
+        p.style.top  = "48%";
+        p.style.setProperty("--tx", `${tx}px`);
+        p.style.setProperty("--ty", `${ty}px`);
+        p.style.background = `linear-gradient(180deg,
+          rgba(255,255,255,.0),
+          rgba(${50+Math.floor(Math.random()*205)},${50+Math.floor(Math.random()*205)},${50+Math.floor(Math.random()*205)},.75),
+          rgba(255,255,255,.0))`;
+        p.style.animationDelay = `${Math.random()*0.12}s`;
+        el.confetti.appendChild(p);
+      }
+    }
+
+    function spawnShards(count=14){
+      el.shards.innerHTML = "";
+      for(let i=0;i<count;i++){
+        const s = document.createElement("div");
+        s.className = "shard";
+        const tx = (Math.random()*2 - 1) * 420;
+        const ty = (Math.random()*2 - 1) * 220;
+        s.style.left = "50%";
+        s.style.top  = "44%";
+        s.style.setProperty("--tx", `${tx}px`);
+        s.style.setProperty("--ty", `${ty}px`);
+        s.style.animationDelay = `${Math.random()*0.10}s`;
+        el.shards.appendChild(s);
+      }
+    }
+
+    function rarityLabel(r){
+      if(r==="N") return "NORM";
+      if(r==="R") return "RARE";
+      if(r==="SR") return "SUPER RARE";
+      if(r==="SSR") return "SUPER SUPER RARE";
+      if(r==="UR") return "ULTRA RARE";
+      return r;
+    }
+
+    function hypeMessage(h){
+      if(h==="虹") return "【虹】来たァァァ！…来たよね？（来たとは言ってない）";
+      if(h==="紫") return "【紫】ワンチャンある。ワンチャンだけ。";
+      return "【青】平常運転。深呼吸して。";
+    }
+
+    function resultMessage(item){
+      const map = {
+        "N":"現実って、こういう味。",
+        "R":"悪くない…悪くないだけ。",
+        "SR":"演出に見合うかは別問題。",
+        "SSR":"脳内でファンファーレ鳴った？気のせい。",
+        "UR":"逆に怖い。誰か見てる？"
+      };
+      return map[item.r] || "結果が出た。おめでとう。";
+    }
+
+    function applyResultToCard(item){
+      el.rarityText.textContent = rarityLabel(item.r);
+      el.itemText.textContent = item.name;
+      el.descText.textContent = item.desc;
+      el.tagText.textContent = item.tag;
+      el.stage.setAttribute("data-r", item.r);
+    }
+
+    function flipToBack(){
+      el.card.classList.add("is-flip");
+    }
+    function flipToFront(){
+      el.card.classList.remove("is-flip");
+    }
+
+    function playSequence(item, hype){
+      setLocked(true);
+      clearFx();
+      flipToFront();
+
+      logLine(`解析中… ${hypeMessage(hype)}`);
+      el.stage.classList.add("shake");
+      el.stage.classList.add("play");
+
+      const isBigFx = (hype==="虹");
+
+      setTimeout(()=>{
+        if(isBigFx){
+          spawnShards(18);
+          spawnConfetti(28);
+        }else if(hype==="紫"){
+          spawnShards(12);
+          spawnConfetti(18);
+        }else{
+          spawnShards(8);
+          spawnConfetti(12);
+        }
+      }, 220);
+
+      setTimeout(()=>{
+        applyResultToCard(item);
+        flipToBack();
+        logLine(`${resultMessage(item)}（${rarityLabel(item.r)}）`);
+      }, 980);
+
+      setTimeout(()=>{
+        el.stage.classList.remove("shake");
+        el.stage.classList.remove("play");
+        setLocked(false);
+      }, 1450);
+    }
+
+    function canPay(type){
+      if(type==="once") return state.stone >= 300;
+      if(type==="ten") return state.stone >= 3000;
+      if(type==="ticket") return state.ticket >= 1;
+      return false;
+    }
+
+    function pay(type){
+      if(type==="once") state.stone -= 300;
+      if(type==="ten") state.stone -= 3000;
+      if(type==="ticket") state.ticket -= 1;
+      updateStats();
+    }
+
+    function drawOnce(payType="once"){
+      if(state.locked) return;
+      if(!canPay(payType)){
+        logLine("足りない。現実はいつも足りない。");
+        el.stage.classList.add("shake");
+        setTimeout(()=>el.stage.classList.remove("shake"), 520);
+        return;
+      }
+      pay(payType);
+
+      const hype = rollFakeHype(); // 演出は盛る
+      const r = pickRarity();      // 結果は現実
+      const item = pickItemByRarity(r);
+
+      playSequence(item, hype);
+    }
+
+    function drawTen(){
+      if(state.locked) return;
+      if(!canPay("ten")){
+        logLine("10連の石がない。まず働こう。");
+        el.stage.classList.add("shake");
+        setTimeout(()=>el.stage.classList.remove("shake"), 520);
+        return;
+      }
+      pay("ten");
+      setLocked(true);
+      clearFx();
+      flipToFront();
+
+      logLine("10連開始。あなたの徳が試される。");
+
+      const results = [];
+      for(let i=0;i<10;i++){
+        const r = pickRarity();
+        results.push(pickItemByRarity(r));
+      }
+
+      const hype = "虹";
+      const last = results[9];
+
+      setTimeout(()=>{
+        playSequence(last, hype);
+      }, 520);
+
+      setTimeout(()=>{
+        const lines = results.map((it, idx)=>`${idx+1}：${rarityLabel(it.r)} / ${it.name}`);
+        el.log.innerHTML = `<div class="logLine">結果一覧（圧倒的現実）</div>
+                            <div class="logLine" style="opacity:.9;margin-top:6px;line-height:1.75">
+                              ${lines.join("<br>")}
+                            </div>`;
+      }, 1080);
+
+      setTimeout(()=>setLocked(false), 1700);
+    }
+
+    function reset(){
+      state.stone = 3000;
+      state.ticket = 3;
+      updateStats();
+      logLine("初期化完了。徳を積んできて。");
+      el.stage.setAttribute("data-r","N");
+      flipToFront();
+      clearFx();
+    }
+
+    // ====== Events ======
+    el.btnOnce.addEventListener("click", ()=>drawOnce("once"));
+    el.btnTicket.addEventListener("click", ()=>drawOnce("ticket"));
+    el.btnTen.addEventListener("click", drawTen);
+    el.btnReset.addEventListener("click", reset);
+
+    // 初期表示
+    updateStats();
+    el.stage.setAttribute("data-r","N");
+  </script>
+</body>
+</html>
